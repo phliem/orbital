@@ -19,7 +19,7 @@ dependencies = [
     "asyncpg>=0.30.0",
     "alembic>=1.13.0",
     # LLM
-    "pydantic-ai-slim[anthropic]>=0.0.39",
+    "pydantic-ai-slim[anthropic,openai]>=1.0.0",
     # Document extraction
     "pymupdf>=1.25.0",
     # HTTP client

@@ -4,11 +4,37 @@ import re
 from collections.abc import AsyncIterator
 
 from pydantic_ai import Agent
+from pydantic_ai.models import Model
+from pydantic_ai.models.anthropic import AnthropicModel
+from pydantic_ai.models.openai import OpenAIResponsesModel, OpenAIResponsesModelSettings
+from pydantic_ai.providers.anthropic import AnthropicProvider
+from pydantic_ai.providers.openai import OpenAIProvider
 
-from takehome.config import settings  # noqa: F401 — triggers ANTHROPIC_API_KEY export
+from takehome.config import Settings, settings
+
+
+def _build_model(config: Settings) -> Model:
+    if config.llm_provider == "openai":
+        api_key = config.openai_api_key.get_secret_value().strip()
+        if not api_key:
+            raise ValueError("Set OPENAI_API_KEY when LLM_PROVIDER=openai.")
+        return OpenAIResponsesModel(
+            "gpt-6-luna",
+            provider=OpenAIProvider(api_key=api_key),
+            settings=OpenAIResponsesModelSettings(openai_store=False),
+        )
+
+    api_key = config.anthropic_api_key.get_secret_value().strip()
+    if not api_key:
+        raise ValueError("Set ANTHROPIC_API_KEY when LLM_PROVIDER=anthropic.")
+    return AnthropicModel(
+        "claude-haiku-4-5-20251001",
+        provider=AnthropicProvider(api_key=api_key),
+    )
+
 
 agent = Agent(
-    "anthropic:claude-haiku-4-5-20251001",
+    _build_model(settings),
     system_prompt=(
         "You are a helpful legal document assistant for commercial real estate lawyers. "
         "You help lawyers review and understand documents during due diligence.\n\n"

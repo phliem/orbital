@@ -26,11 +26,20 @@ just setup
 ```
    This copies `.env.example` to `.env` and builds the Docker images.
 
-3. Add your Anthropic API key to `.env`:
+3. Choose an LLM provider in `.env` and fill in its API key. For Anthropic:
 ```
+LLM_PROVIDER=anthropic
 ANTHROPIC_API_KEY=your_key_here
 ```
-   We've provided an API key in the task email. You can also use your own.
+   Or use OpenAI:
+```
+LLM_PROVIDER=openai
+OPENAI_API_KEY=your_key_here
+```
+   Orbital uses the selected provider for document answers and conversation titles.
+   Existing configurations without `LLM_PROVIDER` default to Anthropic.
+   After switching providers while the app is running, run `docker compose up -d backend`
+   to recreate the backend container with the updated environment.
 
 4. Start everything:
 ```
