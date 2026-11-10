@@ -45,22 +45,50 @@ export function useConversations() {
 		setSelectedId(id);
 	}, []);
 
+	const rename = useCallback(async (id: string, title: string) => {
+		try {
+			const updated = await api.updateConversation(id, title);
+			setConversations((prev) =>
+				prev.map((item) =>
+					item.id === id
+						? {
+								...item,
+								title: updated.title,
+								updated_at: updated.updated_at,
+							}
+						: item,
+				),
+			);
+			return null;
+		} catch (err) {
+			return err instanceof Error
+				? err.message
+				: "Could not save the project title.";
+		}
+	}, []);
+
 	const remove = useCallback(
-		async (id: string) => {
+		async (id: string): Promise<string | null> => {
 			try {
 				setError(null);
 				await api.deleteConversation(id);
-				setConversations((prev) => prev.filter((c) => c.id !== id));
+				const index = conversations.findIndex((item) => item.id === id);
+				const remaining = conversations.filter((item) => item.id !== id);
+				setConversations(remaining);
 				if (selectedId === id) {
-					setSelectedId(null);
+					setSelectedId(
+						remaining[index]?.id ?? remaining[index - 1]?.id ?? null,
+					);
 				}
+				return null;
 			} catch (err) {
-				setError(
-					err instanceof Error ? err.message : "Failed to delete conversation",
-				);
+				const message =
+					err instanceof Error ? err.message : "Failed to delete the project.";
+				setError(message);
+				return message;
 			}
 		},
-		[selectedId],
+		[conversations, selectedId],
 	);
 
 	const selected = conversations.find((c) => c.id === selectedId) ?? null;
@@ -73,6 +101,7 @@ export function useConversations() {
 		error,
 		create,
 		select,
+		rename,
 		remove,
 		refresh,
 	};

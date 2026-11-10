@@ -1,0 +1,46 @@
+{
+  "residential_developer": {
+    "building_height_and_massing": {
+      "page": 2,
+      "excerpt": "No building or structure shall be erected on the Land which exceeds three (3) stories or thirty-six (36) feet in height, whichever is less, measured from finished grade as it existed on the date of the 1987 Declaration."
+    },
+    "buildable_area_easements": {
+      "page": 3,
+      "excerpt": "A twenty-foot (20') wide storm drainage easement as dedicated on the plat of Becker Station Subdivision (Plat Book 12, Page 64), running northeasterly to southwesterly across Lot 7 and crossing the principal buildable area of the Land. The owner of the Land must permit access for construction, maintenance, and repair of storm-drainage facilities within the easement, and may not construct permanent buildings within the easement limits."
+    },
+    "monetary_encumbrances": {
+      "page": 2,
+      "excerpt": "Satisfaction, release, and reconveyance of that certain Deed of Trust dated March 18, 2019, recorded March 22, 2019 at Reception No. 2019018824 in the office of the Clerk and Recorder of Alder County, Colorado, executed by Harborline Property Group LLC in favor of First Pioneer Bank, securing an original principal amount of $4,200,000 and future advances. The issuing office has not been provided with evidence that this Deed of Trust has been released."
+    },
+    "use_restrictions": {
+      "page": 3,
+      "excerpt": "The Land shall not be used as a drive-through restaurant or for any drive-through window that serves food or beverages to customers in vehicles."
+    },
+    "access_rights": {
+      "page": 3,
+      "excerpt": "A non-exclusive easement for ingress and egress over the private drive known as Becker Station Lane, as shown on the plat of Becker Station Subdivision, for the benefit of Lots 5 through 9, Block C."
+    }
+  },
+  "commercial_tenant": {
+    "permitted_use": {
+      "page": 3,
+      "excerpt": "The Land shall not be used as a drive-through restaurant or for any drive-through window that serves food or beverages to customers in vehicles."
+    },
+    "premises_easements": {
+      "page": 3,
+      "excerpt": "A twenty-foot (20') wide storm drainage easement as dedicated on the plat of Becker Station Subdivision (Plat Book 12, Page 64), running northeasterly to southwesterly across Lot 7 and crossing the principal buildable area of the Land. The owner of the Land must permit access for construction, maintenance, and repair of storm-drainage facilities within the easement, and may not construct permanent buildings within the easement limits."
+    },
+    "access_and_shared_drives": {
+      "page": 3,
+      "excerpt": "A non-exclusive easement for ingress and egress over the private drive known as Becker Station Lane, as shown on the plat of Becker Station Subdivision, for the benefit of Lots 5 through 9, Block C."
+    },
+    "security_interests": {
+      "page": 2,
+      "excerpt": "Satisfaction, release, and reconveyance of that certain Deed of Trust dated March 18, 2019, recorded March 22, 2019 at Reception No. 2019018824 in the office of the Clerk and Recorder of Alder County, Colorado, executed by Harborline Property Group LLC in favor of First Pioneer Bank, securing an original principal amount of $4,200,000 and future advances. The issuing office has not been provided with evidence that this Deed of Trust has been released."
+    },
+    "building_limits": {
+      "page": 2,
+      "excerpt": "No building or structure shall be erected on the Land which exceeds three (3) stories or thirty-six (36) feet in height, whichever is less, measured from finished grade as it existed on the date of the 1987 Declaration."
+    }
+  }
+}

@@ -26,6 +26,7 @@ Thumbs.db
 
 # Docker
 pgdata/
+docker-compose.override.yml
 
 # Internal data generation scripts
 scripts/generate-usage-data.py

@@ -1,0 +1,128 @@
+# Lawyer-edited title categories. One persona has one list.
+# A client names a persona. It does not add categories of its own.
+# group is the confirm-checks heading. It is not sent to the model.
+personas:
+  - id: residential_developer
+    name: Residential Developer
+    description: Any residential developer or buyer.
+    categories:
+      - id: building_height_and_massing
+        name: Height and massing
+        description: Private limits on storeys, height, or bulk.
+        guidance: >
+          Quote each cap and the measurement basis. Do not assume a unit
+          count or a number of storeys the document does not state. This
+          category excludes a use ban, an easement, a monetary lien, and an
+          access right.
+        evidence: Declaration, restrictive covenant, or plat note.
+        group: included
+        enabled_by_default: true
+      - id: buildable_area_easements
+        name: Easements over the buildable area
+        description: Easements that cross the site or forbid buildings inside their limits.
+        guidance: >
+          Quote the width, the location, and any ban on buildings when the
+          document states them. Say whether the land is burdened, benefited,
+          or both. This category excludes a height or bulk cap, a use ban, a
+          monetary lien, and an access right that does not cross the buildable
+          area.
+        evidence: Recorded easement or plat dedication.
+        group: included
+        enabled_by_default: true
+      - id: monetary_encumbrances
+        name: Monetary encumbrances
+        description: Mortgages, deeds of trust, judgments, and other liens.
+        guidance: >
+          Quote the holder, the recording reference, and the amount when the
+          document states them. A charge that omits the balance is still an
+          encumbrance. This category excludes a height or bulk cap, a use ban,
+          an easement, and an access right.
+        evidence: Schedule B-I release requirement, or a UK charges-register entry.
+        group: included
+        enabled_by_default: true
+      - id: use_restrictions
+        name: Use restrictions
+        description: Private limits on how the land may be used.
+        guidance: >
+          Quote each distinct limit on use. Do not assume a housing programme
+          the document does not state. This category excludes height and bulk
+          limits, easements, monetary liens, and access rights.
+        evidence: Declaration or restrictive covenant.
+        group: included
+        enabled_by_default: true
+      - id: access_rights
+        name: Access
+        description: Rights of ingress and egress, private roads, and shared drives.
+        guidance: >
+          Quote the way in, and say whether the land is burdened, benefited,
+          or both. This category excludes a height or bulk cap, a use ban, a
+          monetary lien, and an easement that is not access.
+        evidence: Easement or plat note.
+        group: included
+        enabled_by_default: true
+
+  - id: commercial_tenant
+    name: Commercial Tenant
+    description: Any commercial tenant.
+    categories:
+      - id: permitted_use
+        name: Permitted use and use restrictions
+        description: Private limits on the trade or activity that may be carried on.
+        guidance: >
+          Quote each clause that permits or restricts use. Do not assume a
+          trade the document does not name. This category excludes a height or
+          bulk cap, an easement, a security interest, and an access right.
+        evidence: Use covenant, restriction noted on title, or declaration.
+        group: included
+        enabled_by_default: true
+      - id: premises_easements
+        name: Easements across the premises
+        description: Easements over the space a tenant would occupy.
+        guidance: >
+          Quote the location and any ban on buildings or exclusive use. Say
+          whether the land is burdened, benefited, or both. This category
+          excludes a height or bulk cap, a use ban, a security interest, and
+          an access right that does not cross the premises.
+        evidence: Recorded easement or plat dedication.
+        group: included
+        enabled_by_default: true
+      - id: access_and_shared_drives
+        name: Access and shared drives
+        description: How people and vehicles reach the premises, including shared drives.
+        guidance: >
+          Quote the access right and any shared private road. Say whether the
+          land is burdened, benefited, or both. This category excludes a height
+          or bulk cap, a use ban, a security interest, and an easement that is
+          not access.
+        evidence: Easement, plat note, or access reservation.
+        group: included
+        enabled_by_default: true
+      - id: security_interests
+        name: Security interests and occupation
+        description: Mortgages and other security, and what they say about occupation.
+        guidance: >
+          Quote the holder and any amount the document states. Note any
+          language about occupation, priority, or non-disturbance. Do not
+          prescribe a form of agreement. This category excludes a height or
+          bulk cap, a use ban, an easement, and an access right.
+        evidence: Mortgage, deed of trust, or UK registered charge.
+        group: included
+        enabled_by_default: true
+      - id: building_limits
+        name: Building limits
+        description: Caps on storeys, height, or bulk.
+        guidance: >
+          Quote each cap and the measurement basis. Do not assume the building
+          a tenant would fit out. This category excludes a use ban, an
+          easement, a security interest, and an access right.
+        evidence: Declaration, restrictive covenant, or plat note.
+        group: included
+        enabled_by_default: true
+
+clients:
+  - id: willowbank
+    name: Willowbank Homes LLC
+    persona: residential_developer
+  - id: northstar
+    name: Northstar Burger Co.
+    persona: commercial_tenant

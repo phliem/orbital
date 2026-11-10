@@ -23,6 +23,10 @@ services:
       - "${API_PORT:-8000}:8000"
     volumes:
       - ./backend/src:/app/backend/src
+      - ./backend/tests:/app/backend/tests
+      - ./backend/fixtures:/app/backend/fixtures
+      - ./sample-docs:/app/sample-docs
+      - ./backend/config:/app/backend/config
       - ./alembic:/app/alembic
       - ./uploads:/app/uploads
       - ./pyproject.toml:/app/pyproject.toml
@@ -42,6 +46,8 @@ services:
     ports:
       - "5173:5173"
     volumes:
+      - ./frontend/package.json:/app/package.json
+      - ./frontend/package-lock.json:/app/package-lock.json
       - ./frontend/src:/app/src
       - ./frontend/index.html:/app/index.html
       - ./frontend/tailwind.config.js:/app/tailwind.config.js

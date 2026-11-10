@@ -4,22 +4,35 @@ import { DocumentUpload } from "./DocumentUpload";
 interface EmptyStateProps {
 	onUpload: (file: File) => void;
 	uploading?: boolean;
+	error?: string | null;
 }
 
-export function EmptyState({ onUpload, uploading }: EmptyStateProps) {
+export function EmptyState({ onUpload, uploading, error }: EmptyStateProps) {
 	return (
-		<div className="flex flex-col items-center px-4">
-			<div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-neutral-900">
-				<FileSearch className="h-7 w-7 text-white" />
+		<div className="grid flex-1 place-items-center p-8">
+			<div className="flex w-full max-w-lg flex-col items-center text-center">
+				<div className="grid size-20 place-items-center rounded-2xl bg-foreground text-background">
+					<FileSearch className="size-9" />
+				</div>
+				<h2 className="mt-8 text-2xl font-bold tracking-tight">
+					Upload a document to get started
+				</h2>
+				<p className="mt-3 max-w-md text-base text-muted-foreground">
+					Upload one PDF. The review can be a title report, a commercial lease,
+					or an environmental assessment.
+				</p>
+				<div className="mt-10 w-full">
+					<DocumentUpload onUpload={onUpload} uploading={uploading} />
+				</div>
+				{error && (
+					<div
+						role="alert"
+						className="mt-4 w-full rounded-xl border border-high/40 bg-high-soft px-4 py-3 text-left text-sm text-high"
+					>
+						{error}
+					</div>
+				)}
 			</div>
-			<h2 className="mb-2 text-lg font-semibold text-neutral-800">
-				Upload a document to get started
-			</h2>
-			<p className="mb-8 max-w-sm text-center text-sm text-neutral-500">
-				Ask questions about leases, title reports, contracts, and other legal
-				documents
-			</p>
-			<DocumentUpload onUpload={onUpload} uploading={uploading} />
 		</div>
 	);
 }

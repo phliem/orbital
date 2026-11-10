@@ -10,8 +10,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import FileResponse
 
 from takehome.db.session import get_session
+from takehome.services.checklist import apply_project_title
 from takehome.services.conversation import get_conversation
-from takehome.services.document import get_document, upload_document
+from takehome.services.document import (
+    delete_document,
+    get_document,
+    is_stored_upload,
+    stored_file_size,
+    upload_document,
+)
 
 logger = structlog.get_logger()
 
@@ -28,7 +35,9 @@ class DocumentOut(BaseModel):
     conversation_id: str
     filename: str
     page_count: int
+    document_type: str = "title-report"
     uploaded_at: datetime
+    size_bytes: int | None = None
 
     model_config = {"from_attributes": True}
 
@@ -60,11 +69,11 @@ async def upload_document_endpoint(
 
     try:
         document = await upload_document(session, conversation_id, file)
-    except ValueError as e:
-        error_message = str(e)
+    except ValueError as exc:
+        error_message = str(exc)
         if "already has a document" in error_message:
-            raise HTTPException(status_code=409, detail=error_message)
-        raise HTTPException(status_code=400, detail=error_message)
+            raise HTTPException(status_code=409, detail=error_message) from exc
+        raise HTTPException(status_code=400, detail=error_message) from exc
 
     logger.info(
         "Document uploaded",
@@ -73,13 +82,28 @@ async def upload_document_endpoint(
         filename=document.filename,
     )
 
+    await apply_project_title(session, conversation_id, document.file_path)
+
     return DocumentOut(
         id=document.id,
         conversation_id=document.conversation_id,
         filename=document.filename,
         page_count=document.page_count,
+        document_type=document.document_type,
         uploaded_at=document.uploaded_at,
+        size_bytes=stored_file_size(document.file_path),
     )
+
+
+@router.delete("/api/documents/{document_id}", status_code=204)
+async def delete_document_endpoint(
+    document_id: str,
+    session: AsyncSession = Depends(get_session),
+) -> None:
+    """Delete a document, its PDF, and the checklist generated from it."""
+    deleted = await delete_document(session, document_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Document not found")
 
 
 @router.get("/api/documents/{document_id}/content")
@@ -92,7 +116,7 @@ async def serve_document_file(
     if document is None:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    if not os.path.exists(document.file_path):
+    if not is_stored_upload(document.file_path) or not os.path.isfile(document.file_path):
         raise HTTPException(status_code=404, detail="File not found on disk")
 
     return FileResponse(

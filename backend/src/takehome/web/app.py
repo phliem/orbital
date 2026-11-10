@@ -5,16 +5,24 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 import structlog
-from alembic import command
 from alembic.config import Config
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+from alembic import command
 
 logger = structlog.get_logger()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    from takehome.services.personas import persona_catalog
+
+    catalog = persona_catalog()
+    logger.info(
+        "Title personas loaded",
+        personas=[persona.id for persona in catalog.personas],
+    )
     logger.info("Running database migrations...")
     alembic_cfg = Config("alembic.ini")
     # Run in a thread because alembic's env.py uses asyncio.run(),
@@ -34,8 +42,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from takehome.web.routers import conversations, documents, messages  # noqa: E402
+from takehome.web.routers import checklist, conversations, documents, messages, personas  # noqa: E402
 
 app.include_router(conversations.router)
 app.include_router(messages.router)
 app.include_router(documents.router)
+app.include_router(checklist.router)
+app.include_router(personas.router)
