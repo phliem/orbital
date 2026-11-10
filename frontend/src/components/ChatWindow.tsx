@@ -2,8 +2,15 @@ import { Loader2 } from "lucide-react";
 import { useEffect, useRef } from "react";
 import type { Message } from "../types";
 import { ChatInput } from "./ChatInput";
-import { EmptyState } from "./EmptyState";
+import { ErrorNotice } from "./ErrorNotice";
 import { MessageBubble, StreamingBubble } from "./MessageBubble";
+import { Button } from "./ui/button";
+
+const suggestions = [
+	"What are the biggest risks?",
+	"Which easements are recorded?",
+	"What security interests are on the title?",
+];
 
 interface ChatWindowProps {
 	messages: Message[];
@@ -14,7 +21,6 @@ interface ChatWindowProps {
 	hasDocument: boolean;
 	conversationId: string | null;
 	onSend: (content: string) => void;
-	onUpload: (file: File) => void;
 }
 
 export function ChatWindow({
@@ -26,89 +32,75 @@ export function ChatWindow({
 	hasDocument,
 	conversationId,
 	onSend,
-	onUpload,
 }: ChatWindowProps) {
 	const scrollRef = useRef<HTMLDivElement>(null);
-
-	// Auto-scroll to bottom when new messages arrive or during streaming
 	const messagesLength = messages.length;
-	// biome-ignore lint/correctness/useExhaustiveDependencies: messages and streamingContent are intentional triggers for auto-scroll
+
+	// biome-ignore lint/correctness/useExhaustiveDependencies: streaming text should keep the latest reply in view
 	useEffect(() => {
 		if (scrollRef.current) {
 			scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
 		}
 	}, [messagesLength, streamingContent]);
 
-	// No conversation selected
 	if (!conversationId) {
 		return (
-			<div className="flex flex-1 items-center justify-center bg-neutral-50">
-				<div className="text-center">
-					<p className="text-sm text-neutral-400">
-						Select a conversation or create a new one
-					</p>
-				</div>
+			<div className="grid flex-1 place-items-center text-sm text-muted-foreground">
+				Select a project to ask about its document.
 			</div>
 		);
 	}
 
-	// Loading messages
 	if (loading) {
 		return (
-			<div className="flex flex-1 items-center justify-center bg-white">
-				<Loader2 className="h-6 w-6 animate-spin text-neutral-400" />
-			</div>
-		);
-	}
-
-	// Empty conversation - show upload prompt
-	if (messages.length === 0 && !streaming) {
-		return (
-			<div className="flex flex-1 flex-col bg-white">
-				<div className="flex flex-1 items-center justify-center">
-					{hasDocument ? (
-						<div className="text-center">
-							<p className="text-sm text-neutral-500">
-								Document uploaded. Ask a question to get started.
-							</p>
-						</div>
-					) : (
-						<EmptyState onUpload={onUpload} />
-					)}
-				</div>
-				<ChatInput
-					onSend={onSend}
-					onUpload={onUpload}
-					disabled={streaming}
-					hasDocument={hasDocument}
-				/>
+			<div className="grid flex-1 place-items-center">
+				<Loader2 className="size-6 animate-spin text-muted-foreground" />
 			</div>
 		);
 	}
 
 	return (
-		<div className="flex flex-1 flex-col bg-white">
+		<div className="flex min-h-0 flex-1 flex-col">
 			{error && (
-				<div className="mx-4 mt-2 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600">
-					{error}
+				<div className="mx-auto mt-4 w-full max-w-2xl">
+					<ErrorNotice message={error} title="Chat is unavailable." />
 				</div>
 			)}
-
-			<div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-4">
-				<div className="mx-auto max-w-2xl space-y-1">
+			<div ref={scrollRef} className="flex-1 overflow-y-auto">
+				<div className="mx-auto max-w-2xl space-y-4 p-6">
+					{messages.length === 0 && !streaming && (
+						<div className="py-12 text-center">
+							<h2 className="text-2xl font-semibold tracking-tight">
+								Ask about this project
+							</h2>
+							<p className="mt-2 text-sm text-muted-foreground">
+								{hasDocument
+									? "Answers use the PDF uploaded on this project."
+									: "Upload a PDF on the Analysis tab, then ask about it here."}
+							</p>
+							{hasDocument && (
+								<div className="mt-5 flex flex-wrap justify-center gap-2">
+									{suggestions.map((suggestion) => (
+										<Button
+											key={suggestion}
+											variant="outline"
+											size="sm"
+											onClick={() => onSend(suggestion)}
+										>
+											{suggestion}
+										</Button>
+									))}
+								</div>
+							)}
+						</div>
+					)}
 					{messages.map((message) => (
 						<MessageBubble key={message.id} message={message} />
 					))}
 					{streaming && <StreamingBubble content={streamingContent} />}
 				</div>
 			</div>
-
-			<ChatInput
-				onSend={onSend}
-				onUpload={onUpload}
-				disabled={streaming}
-				hasDocument={hasDocument}
-			/>
+			<ChatInput onSend={onSend} disabled={streaming} />
 		</div>
 	);
 }

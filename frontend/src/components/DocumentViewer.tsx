@@ -1,9 +1,24 @@
-import { ChevronLeft, ChevronRight, FileText, Loader2 } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
+import {
+	ChevronLeft,
+	ChevronRight,
+	FileText,
+	Loader2,
+	Search,
+	ZoomIn,
+	ZoomOut,
+} from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Document as PDFDocument, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 import { getDocumentUrl } from "../lib/api";
+import {
+	countMatches,
+	firstMatchPage,
+	markExcerpt,
+	markQuery,
+	pageTextFromItems,
+} from "../lib/highlight";
 import type { Document } from "../types";
 import { Button } from "./ui/button";
 
@@ -12,159 +27,258 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 	import.meta.url,
 ).toString();
 
-const MIN_WIDTH = 280;
-const MAX_WIDTH = 700;
-const DEFAULT_WIDTH = 400;
+export interface CitationJump {
+	page: number;
+	excerpt: string;
+	clause: string;
+	nonce: number;
+}
 
 interface DocumentViewerProps {
 	document: Document | null;
+	page: number;
+	onPageChange: (page: number) => void;
+	jump: CitationJump | null;
 }
 
-export function DocumentViewer({ document }: DocumentViewerProps) {
-	const [numPages, setNumPages] = useState<number>(0);
-	const [currentPage, setCurrentPage] = useState(1);
-	const [pdfLoading, setPdfLoading] = useState(true);
+export function DocumentViewer({
+	document,
+	page,
+	onPageChange,
+	jump,
+}: DocumentViewerProps) {
+	const [numPages, setNumPages] = useState(0);
 	const [pdfError, setPdfError] = useState<string | null>(null);
-	const [width, setWidth] = useState(DEFAULT_WIDTH);
-	const [dragging, setDragging] = useState(false);
-	const containerRef = useRef<HTMLDivElement>(null);
+	const [zoom, setZoom] = useState(100);
+	const [pageWidth, setPageWidth] = useState(520);
+	const [pageTexts, setPageTexts] = useState<string[]>([]);
+	const [searchOpen, setSearchOpen] = useState(false);
+	const [query, setQuery] = useState("");
+	const scrollRef = useRef<HTMLDivElement>(null);
+	const searchRef = useRef<HTMLInputElement>(null);
+	const documentId = document?.id ?? null;
 
-	const handleMouseDown = useCallback(
-		(e: React.MouseEvent) => {
-			e.preventDefault();
-			setDragging(true);
+	useEffect(() => {
+		const el = scrollRef.current;
+		if (!el) return;
+		const measure = () => setPageWidth(Math.max(280, el.clientWidth - 64));
+		measure();
+		const observer = new ResizeObserver(measure);
+		observer.observe(el);
+		return () => observer.disconnect();
+	}, []);
 
-			const startX = e.clientX;
-			const startWidth = width;
+	// documentId is the reset key when the open PDF changes.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: reset search for the next document
+	useEffect(() => {
+		setPageTexts([]);
+		setNumPages(0);
+		setQuery("");
+		setSearchOpen(false);
+	}, [documentId]);
 
-			const handleMouseMove = (moveEvent: MouseEvent) => {
-				const delta = startX - moveEvent.clientX;
-				const newWidth = Math.min(
-					MAX_WIDTH,
-					Math.max(MIN_WIDTH, startWidth + delta),
-				);
-				setWidth(newWidth);
-			};
-
-			const handleMouseUp = () => {
-				setDragging(false);
-				window.removeEventListener("mousemove", handleMouseMove);
-				window.removeEventListener("mouseup", handleMouseUp);
-			};
-
-			window.addEventListener("mousemove", handleMouseMove);
-			window.addEventListener("mouseup", handleMouseUp);
+	const paint = useCallback(
+		(scrollSearch: boolean) => {
+			const root = scrollRef.current;
+			if (!root) return;
+			if (jump && jump.page === page) markExcerpt(root, jump.excerpt);
+			markQuery(root, searchOpen ? query.trim() : "", scrollSearch);
 		},
-		[width],
+		[jump, page, query, searchOpen],
 	);
 
-	const pdfPageWidth = width - 48; // account for px-4 padding on each side
+	useEffect(() => {
+		paint(true);
+		const early = window.setTimeout(() => paint(false), 300);
+		const later = window.setTimeout(() => paint(false), 900);
+		return () => {
+			window.clearTimeout(early);
+			window.clearTimeout(later);
+		};
+	}, [paint]);
+
+	const trimmed = query.trim();
+	const matches = searchOpen ? countMatches(pageTexts, trimmed) : 0;
+
+	useEffect(() => {
+		if (!searchOpen || !trimmed || pageTexts.length === 0) return;
+		const next = firstMatchPage(pageTexts, trimmed);
+		if (next) onPageChange(next);
+	}, [pageTexts, searchOpen, trimmed, onPageChange]);
+
+	useEffect(() => {
+		if (searchOpen) searchRef.current?.focus();
+	}, [searchOpen]);
+
+	const onSearch = (value: string) => {
+		setQuery(value);
+		const next = firstMatchPage(pageTexts, value);
+		if (next) onPageChange(next);
+	};
 
 	if (!document) {
 		return (
-			<div
-				style={{ width }}
-				className="flex h-full flex-shrink-0 flex-col items-center justify-center border-l border-neutral-200 bg-neutral-50"
-			>
-				<FileText className="mb-3 h-10 w-10 text-neutral-300" />
-				<p className="text-sm text-neutral-400">No document uploaded</p>
+			<div className="flex h-full min-w-0 flex-1 items-center justify-center rounded-xl border border-border bg-muted/50 text-sm text-muted-foreground">
+				No document uploaded
 			</div>
 		);
 	}
 
-	const pdfUrl = getDocumentUrl(document.id);
+	const safePage = numPages > 0 ? Math.min(page, numPages) : page;
+	const showJump = jump && jump.page === safePage;
 
 	return (
-		<div
-			ref={containerRef}
-			style={{ width }}
-			className="relative flex h-full flex-shrink-0 flex-col border-l border-neutral-200 bg-white"
-		>
-			{/* Resize handle */}
-			<div
-				className={`absolute top-0 left-0 z-10 h-full w-1.5 cursor-col-resize transition-colors hover:bg-neutral-300 ${
-					dragging ? "bg-neutral-400" : ""
-				}`}
-				onMouseDown={handleMouseDown}
-			/>
-
-			{/* Header */}
-			<div className="flex items-center justify-between border-b border-neutral-100 px-4 py-3">
-				<div className="min-w-0">
-					<p className="truncate text-sm font-medium text-neutral-800">
-						{document.filename}
-					</p>
-					<p className="text-xs text-neutral-400">
-						{document.page_count} page{document.page_count !== 1 ? "s" : ""}
-					</p>
+		<div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-muted/50">
+			<div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-border bg-card px-4 py-2 text-sm">
+				<FileText className="size-4 shrink-0 text-muted-foreground" />
+				<span className="min-w-0 flex-1 truncate text-muted-foreground">
+					{document.filename}
+				</span>
+				<div className="ml-auto flex flex-wrap items-center justify-end gap-1">
+					<Button
+						size="icon"
+						variant="outline"
+						className="size-8"
+						disabled={safePage <= 1}
+						onClick={() => onPageChange(Math.max(1, safePage - 1))}
+						aria-label="Previous page"
+					>
+						<ChevronLeft />
+					</Button>
+					<span className="whitespace-nowrap px-2">
+						Page {safePage} of {numPages || document.page_count || "–"}
+					</span>
+					<Button
+						size="icon"
+						variant="outline"
+						className="size-8"
+						disabled={numPages > 0 && safePage >= numPages}
+						onClick={() => onPageChange(safePage + 1)}
+						aria-label="Next page"
+					>
+						<ChevronRight />
+					</Button>
+					<Button
+						size="icon"
+						variant="ghost"
+						className="ml-2 size-8"
+						onClick={() => setZoom((value) => Math.max(70, value - 10))}
+						aria-label="Zoom out"
+					>
+						<ZoomOut />
+					</Button>
+					<span className="w-12 text-center text-muted-foreground">
+						{zoom}%
+					</span>
+					<Button
+						size="icon"
+						variant="ghost"
+						className="size-8"
+						onClick={() => setZoom((value) => Math.min(150, value + 10))}
+						aria-label="Zoom in"
+					>
+						<ZoomIn />
+					</Button>
+					{searchOpen && (
+						<span className="flex items-center gap-1.5">
+							<input
+								ref={searchRef}
+								value={query}
+								onChange={(event) => onSearch(event.target.value)}
+								placeholder="Search document…"
+								aria-label="Search document"
+								className="h-8 w-44 rounded-md border border-border bg-background px-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring"
+							/>
+							{trimmed && (
+								<span className="whitespace-nowrap text-xs text-muted-foreground">
+									{matches} match{matches === 1 ? "" : "es"}
+								</span>
+							)}
+						</span>
+					)}
+					<Button
+						size="icon"
+						variant={searchOpen ? "secondary" : "ghost"}
+						className="size-8"
+						aria-label="Search document"
+						aria-pressed={searchOpen}
+						onClick={() => {
+							setSearchOpen((open) => !open);
+							if (searchOpen) setQuery("");
+						}}
+					>
+						<Search />
+					</Button>
 				</div>
 			</div>
-
-			{/* PDF content */}
-			<div className="flex-1 overflow-y-auto p-4">
+			{showJump && (
+				<div className="evidence-flash border-b border-border bg-mark px-3 py-1.5 text-center font-sans text-xs font-medium text-foreground">
+					{jump.clause}
+				</div>
+			)}
+			<div ref={scrollRef} className="flex-1 overflow-auto px-6 py-4">
 				{pdfError && (
-					<div className="rounded-lg bg-red-50 p-3 text-sm text-red-600">
+					<div
+						className="mb-3 rounded-lg bg-high-soft p-3 text-sm text-high"
+						role="alert"
+					>
 						{pdfError}
 					</div>
 				)}
-
 				<PDFDocument
-					file={pdfUrl}
-					onLoadSuccess={({ numPages: pages }) => {
-						setNumPages(pages);
-						setPdfLoading(false);
+					file={getDocumentUrl(document.id)}
+					onLoadSuccess={(pdf) => {
+						setNumPages(pdf.numPages);
 						setPdfError(null);
+						void readPageTexts(pdf).then(setPageTexts);
 					}}
-					onLoadError={(error) => {
-						setPdfError(`Failed to load PDF: ${error.message}`);
-						setPdfLoading(false);
-					}}
+					onLoadError={(error) =>
+						setPdfError(`Failed to load PDF: ${error.message}`)
+					}
 					loading={
 						<div className="flex items-center justify-center py-12">
-							<Loader2 className="h-6 w-6 animate-spin text-neutral-400" />
+							<Loader2 className="size-6 animate-spin text-muted-foreground" />
 						</div>
 					}
 				>
-					{!pdfLoading && !pdfError && (
-						<Page
-							pageNumber={currentPage}
-							width={pdfPageWidth}
-							loading={
-								<div className="flex items-center justify-center py-12">
-									<Loader2 className="h-5 w-5 animate-spin text-neutral-300" />
-								</div>
-							}
-						/>
-					)}
+					<Page
+						pageNumber={safePage}
+						width={pageWidth * (zoom / 100)}
+						onRenderTextLayerSuccess={() => paint(false)}
+						loading={
+							<div className="flex items-center justify-center py-12">
+								<Loader2 className="size-5 animate-spin text-muted-foreground" />
+							</div>
+						}
+					/>
 				</PDFDocument>
 			</div>
-
-			{/* Page navigation */}
-			{numPages > 0 && (
-				<div className="flex items-center justify-center gap-3 border-t border-neutral-100 px-4 py-2.5">
-					<Button
-						variant="ghost"
-						size="icon"
-						className="h-7 w-7"
-						disabled={currentPage <= 1}
-						onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-					>
-						<ChevronLeft className="h-4 w-4" />
-					</Button>
-					<span className="text-xs text-neutral-500">
-						Page {currentPage} of {numPages}
-					</span>
-					<Button
-						variant="ghost"
-						size="icon"
-						className="h-7 w-7"
-						disabled={currentPage >= numPages}
-						onClick={() => setCurrentPage((p) => Math.min(numPages, p + 1))}
-					>
-						<ChevronRight className="h-4 w-4" />
-					</Button>
-				</div>
-			)}
 		</div>
 	);
+}
+
+async function readPageTexts(pdf: {
+	numPages: number;
+	getPage: (page: number) => Promise<{
+		getTextContent: () => Promise<{ items: readonly unknown[] }>;
+	}>;
+}): Promise<string[]> {
+	const texts: string[] = [];
+	for (let number = 1; number <= pdf.numPages; number++) {
+		const pdfPage = await pdf.getPage(number);
+		const content = await pdfPage.getTextContent();
+		const items = content.items.flatMap((item) => {
+			if (
+				typeof item === "object" &&
+				item !== null &&
+				"str" in item &&
+				typeof item.str === "string"
+			) {
+				return [{ str: item.str }];
+			}
+			return [];
+		});
+		texts.push(pageTextFromItems(items));
+	}
+	return texts;
 }

@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import os
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from takehome.db.models import Conversation, Document
 from takehome.db.session import get_session
 from takehome.services.conversation import (
+    InvalidTitleError,
     create_conversation,
     delete_conversation,
     get_conversation,
@@ -26,6 +29,7 @@ router = APIRouter(prefix="/api/conversations", tags=["conversations"])
 class ConversationListItem(BaseModel):
     id: str
     title: str
+    property_line: str | None = None
     created_at: datetime
     updated_at: datetime
     has_document: bool
@@ -36,6 +40,7 @@ class ConversationListItem(BaseModel):
 class ConversationDetail(BaseModel):
     id: str
     title: str
+    property_line: str | None = None
     created_at: datetime
     updated_at: datetime
     has_document: bool
@@ -48,9 +53,36 @@ class DocumentInfo(BaseModel):
     id: str
     filename: str
     page_count: int
+    document_type: str = "title-report"
     uploaded_at: datetime
+    size_bytes: int | None = None
 
     model_config = {"from_attributes": True}
+
+
+def _property_line(conversation: Conversation) -> str | None:
+    """The extracted line, falling back to a title this app set from that address."""
+    if conversation.property_line and conversation.property_line.strip():
+        return conversation.property_line.strip()
+    if conversation.title_source == "document" and conversation.title.strip():
+        return conversation.title.strip()
+    return None
+
+
+def _document_info(document: Document) -> DocumentInfo:
+    size_bytes: int | None
+    try:
+        size_bytes = os.path.getsize(document.file_path)
+    except OSError:
+        size_bytes = None
+    return DocumentInfo(
+        id=document.id,
+        filename=document.filename,
+        page_count=document.page_count,
+        document_type=document.document_type,
+        uploaded_at=document.uploaded_at,
+        size_bytes=size_bytes,
+    )
 
 
 class ConversationCreate(BaseModel):
@@ -76,6 +108,7 @@ async def list_conversations_endpoint(
         ConversationListItem(
             id=c.id,
             title=c.title,
+            property_line=_property_line(c),
             created_at=c.created_at,
             updated_at=c.updated_at,
             has_document=len(c.documents) > 0,
@@ -93,6 +126,7 @@ async def create_conversation_endpoint(
     return ConversationDetail(
         id=conversation.id,
         title=conversation.title,
+        property_line=_property_line(conversation),
         created_at=conversation.created_at,
         updated_at=conversation.updated_at,
         has_document=False,
@@ -110,19 +144,12 @@ async def get_conversation_endpoint(
     if conversation is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    doc_info: DocumentInfo | None = None
-    if conversation.documents:
-        doc = conversation.documents[0]
-        doc_info = DocumentInfo(
-            id=doc.id,
-            filename=doc.filename,
-            page_count=doc.page_count,
-            uploaded_at=doc.uploaded_at,
-        )
+    doc_info = _document_info(conversation.documents[0]) if conversation.documents else None
 
     return ConversationDetail(
         id=conversation.id,
         title=conversation.title,
+        property_line=_property_line(conversation),
         created_at=conversation.created_at,
         updated_at=conversation.updated_at,
         has_document=doc_info is not None,
@@ -137,23 +164,22 @@ async def update_conversation_endpoint(
     session: AsyncSession = Depends(get_session),
 ) -> ConversationDetail:
     """Update a conversation's title."""
-    conversation = await update_conversation(session, conversation_id, body.title)
+    try:
+        conversation = await update_conversation(session, conversation_id, body.title)
+    except InvalidTitleError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "invalid_title", "message": str(exc)},
+        ) from exc
     if conversation is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    doc_info: DocumentInfo | None = None
-    if conversation.documents:
-        doc = conversation.documents[0]
-        doc_info = DocumentInfo(
-            id=doc.id,
-            filename=doc.filename,
-            page_count=doc.page_count,
-            uploaded_at=doc.uploaded_at,
-        )
+    doc_info = _document_info(conversation.documents[0]) if conversation.documents else None
 
     return ConversationDetail(
         id=conversation.id,
         title=conversation.title,
+        property_line=_property_line(conversation),
         created_at=conversation.created_at,
         updated_at=conversation.updated_at,
         has_document=doc_info is not None,

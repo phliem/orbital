@@ -14,16 +14,19 @@ setup:
     docker compose build
     @echo ""
     @echo "Setup complete! Next steps:"
-    @echo "  1. Edit .env with your Anthropic API key"
+    @echo "  1. Set ANTHROPIC_API_KEY or OPENAI_API_KEY in .env before running a report"
     @echo "  2. Run 'just dev' to start everything"
 
 # =============================================================================
 # Development
 # =============================================================================
 
-# Start the full stack (Postgres, backend, frontend) with hot reload
+# Start the full stack (Postgres, backend, frontend) with hot reload.
+# --build picks up frontend dependency changes. The image's node_modules
+# is not a volume, so a previously built image will not see a new package
+# until it is rebuilt.
 dev:
-    docker compose up
+    docker compose up --build
 
 # Start in background
 dev-detach:
@@ -33,7 +36,9 @@ dev-detach:
 stop:
     docker compose down
 
-# Stop all services and remove database volume
+# Stop all services and remove the database volume.
+# The schema is one initial migration. A volume from the old migration
+# chain will not upgrade, so reset it before starting again.
 reset:
     docker compose down -v
     @echo "All data cleared. Run 'just dev' to start fresh."
@@ -50,7 +55,7 @@ logs:
 # Database
 # =============================================================================
 
-# Initialize / migrate database
+# Apply the single initial migration
 db-init:
     docker compose exec backend uv run alembic upgrade head
     @echo "Database initialised!"
@@ -70,6 +75,10 @@ db-shell:
 # =============================================================================
 # Code Quality
 # =============================================================================
+
+# Run backend tests (fixture checklist)
+test:
+    docker compose exec backend uv run pytest -q
 
 # Run all checks
 check: check-backend check-frontend

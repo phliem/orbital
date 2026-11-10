@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from logging.config import fileConfig
 
 from alembic import context
@@ -10,6 +11,12 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from takehome.db.models import Base
 
 config = context.config
+
+# The app's DATABASE_URL is the connection the server actually uses. Alembic
+# otherwise reads alembic.ini, which can drift from that setting.
+database_url = os.environ.get("DATABASE_URL")
+if database_url:
+    config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

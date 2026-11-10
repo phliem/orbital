@@ -16,6 +16,8 @@ RUN uv sync --group dev
 
 # Copy source (will be overridden by volume mount in dev)
 COPY backend/src ./backend/src
+COPY backend/config ./backend/config
+COPY sample-docs ./sample-docs
 COPY alembic ./alembic
 COPY alembic.ini ./alembic.ini
 

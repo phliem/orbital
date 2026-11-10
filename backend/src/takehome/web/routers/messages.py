@@ -7,19 +7,27 @@ from datetime import datetime
 import structlog
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import StreamingResponse
 
-from takehome.db.models import Message
+from takehome.db.models import Conversation, Message
 from takehome.db.session import get_session
-from takehome.services.conversation import get_conversation, update_conversation
+from takehome.services.conversation import clean_title, get_conversation
 from takehome.services.document import get_document_for_conversation
-from takehome.services.llm import chat_with_document, count_sources_cited, generate_title
+from takehome.services.llm import (
+    NO_MODEL_KEY_MESSAGE,
+    chat_with_document,
+    count_sources_cited,
+    generate_title,
+    provider_has_credentials,
+)
 
 logger = structlog.get_logger()
 
 router = APIRouter(tags=["messages"])
+
+_PLACEHOLDER_TITLES = {"Untitled project", "New Conversation", "New conversation"}
 
 
 # --------------------------------------------------------------------------- #
@@ -55,15 +63,17 @@ async def list_messages(
     conversation_id: str,
     session: AsyncSession = Depends(get_session),
 ) -> list[MessageOut]:
-    """List all messages in a conversation, ordered by creation time."""
+    """List chat for the current upload, ordered by creation time."""
     # Verify the conversation exists
     conversation = await get_conversation(session, conversation_id)
     if conversation is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
+    document = await get_document_for_conversation(session, conversation_id)
+    document_id = document.id if document else None
     stmt = (
         select(Message)
-        .where(Message.conversation_id == conversation_id)
+        .where(Message.conversation_id == conversation_id, Message.document_id == document_id)
         .order_by(Message.created_at.asc())
     )
     result = await session.execute(stmt)
@@ -89,14 +99,25 @@ async def send_message(
     session: AsyncSession = Depends(get_session),
 ) -> StreamingResponse:
     """Send a user message and stream back the AI response via SSE."""
+    if not provider_has_credentials():
+        raise HTTPException(
+            status_code=503,
+            detail={"error": "no_api_key", "message": NO_MODEL_KEY_MESSAGE},
+        )
+
     # Verify the conversation exists
     conversation = await get_conversation(session, conversation_id)
     if conversation is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
+    document = await get_document_for_conversation(session, conversation_id)
+    document_id = document.id if document else None
+    document_text = document.extracted_text if document else None
+
     # Save the user message
     user_message = Message(
         conversation_id=conversation_id,
+        document_id=document_id,
         role="user",
         content=body.content,
     )
@@ -106,14 +127,10 @@ async def send_message(
 
     logger.info("User message saved", conversation_id=conversation_id, message_id=user_message.id)
 
-    # Load document text for the conversation
-    document = await get_document_for_conversation(session, conversation_id)
-    document_text: str | None = document.extracted_text if document else None
-
     # Load conversation history (exclude the message we just saved, it will be the user_message param)
     stmt = (
         select(Message)
-        .where(Message.conversation_id == conversation_id)
+        .where(Message.conversation_id == conversation_id, Message.document_id == document_id)
         .where(Message.id != user_message.id)
         .order_by(Message.created_at.asc())
     )
@@ -147,7 +164,9 @@ async def send_message(
                 "Error during LLM streaming",
                 conversation_id=conversation_id,
             )
-            error_msg = "I'm sorry, an error occurred while generating a response. Please try again."
+            error_msg = (
+                "I'm sorry, an error occurred while generating a response. Please try again."
+            )
             full_response = error_msg
             event_data = json.dumps({"type": "content", "content": error_msg})
             yield f"data: {event_data}\n\n"
@@ -162,6 +181,7 @@ async def send_message(
         async with session_factory() as save_session:
             assistant_message = Message(
                 conversation_id=conversation_id,
+                document_id=document_id,
                 role="assistant",
                 content=full_response,
                 sources_cited=sources,
@@ -170,16 +190,26 @@ async def send_message(
             await save_session.commit()
             await save_session.refresh(assistant_message)
 
-            # Auto-generate title from first user message
-            if is_first_message:
+            # Name an untitled project from the first question. A title taken
+            # from the uploaded PDF stays put.
+            if (
+                is_first_message
+                and conversation.title_source == "default"
+                and conversation.title in _PLACEHOLDER_TITLES
+                and provider_has_credentials()
+            ):
                 try:
-                    title = await generate_title(body.content)
-                    await update_conversation(save_session, conversation_id, title)
-                    logger.info(
-                        "Auto-generated conversation title",
-                        conversation_id=conversation_id,
-                        title=title,
+                    title = clean_title(await generate_title(body.content))
+                    await save_session.execute(
+                        update(Conversation)
+                        .where(
+                            Conversation.id == conversation_id,
+                            Conversation.title_source == "default",
+                            Conversation.title.in_(_PLACEHOLDER_TITLES),
+                        )
+                        .values(title=title)
                     )
+                    await save_session.commit()
                 except Exception:
                     logger.exception(
                         "Failed to generate title",

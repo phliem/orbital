@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import * as api from "../lib/api";
 import type { Message } from "../types";
 
-export function useMessages(conversationId: string | null) {
+export function useMessages(
+	conversationId: string | null,
+	documentId: string | null,
+) {
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -10,35 +13,40 @@ export function useMessages(conversationId: string | null) {
 	const [streamingContent, setStreamingContent] = useState("");
 	const abortRef = useRef<AbortController | null>(null);
 
-	const refresh = useCallback(async () => {
-		if (!conversationId) {
-			setMessages([]);
-			return;
+	// biome-ignore lint/correctness/useExhaustiveDependencies: a new upload starts a new chat
+	useLayoutEffect(() => {
+		const controller = new AbortController();
+		abortRef.current = controller;
+		setMessages([]);
+		setError(null);
+		setStreaming(false);
+		setStreamingContent("");
+		setLoading(Boolean(conversationId));
+		if (conversationId) {
+			api
+				.fetchMessages(conversationId, controller.signal)
+				.then((data) => {
+					if (!controller.signal.aborted) setMessages(data);
+				})
+				.catch((err: unknown) => {
+					if (!controller.signal.aborted) {
+						setError(
+							err instanceof Error ? err.message : "Failed to load messages",
+						);
+					}
+				})
+				.finally(() => {
+					if (!controller.signal.aborted) setLoading(false);
+				});
 		}
-		try {
-			setLoading(true);
-			setError(null);
-			const data = await api.fetchMessages(conversationId);
-			setMessages(data);
-		} catch (err) {
-			setError(err instanceof Error ? err.message : "Failed to load messages");
-		} finally {
-			setLoading(false);
-		}
-	}, [conversationId]);
-
-	useEffect(() => {
-		refresh();
-		return () => {
-			if (abortRef.current) {
-				abortRef.current.abort();
-			}
-		};
-	}, [refresh]);
+		return () => controller.abort();
+	}, [conversationId, documentId]);
 
 	const send = useCallback(
 		async (content: string) => {
-			if (!conversationId || streaming) return;
+			const signal = abortRef.current?.signal;
+			if (!conversationId || !signal || signal.aborted || streaming || loading)
+				return;
 
 			const userMessage: Message = {
 				id: `temp-${Date.now()}`,
@@ -55,7 +63,7 @@ export function useMessages(conversationId: string | null) {
 			setError(null);
 
 			try {
-				const response = await api.sendMessage(conversationId, content);
+				const response = await api.sendMessage(conversationId, content, signal);
 
 				if (!response.body) {
 					throw new Error("No response body");
@@ -68,6 +76,7 @@ export function useMessages(conversationId: string | null) {
 
 				while (true) {
 					const { done, value } = await reader.read();
+					if (signal.aborted) return;
 					if (done) break;
 
 					buffer += decoder.decode(value, { stream: true });
@@ -126,17 +135,22 @@ export function useMessages(conversationId: string | null) {
 				}
 
 				// Refresh to get server-canonical messages
-				const freshMessages = await api.fetchMessages(conversationId);
-				setMessages(freshMessages);
+				const freshMessages = await api.fetchMessages(conversationId, signal);
+				if (!signal.aborted) setMessages(freshMessages);
 			} catch (err) {
-				if (err instanceof DOMException && err.name === "AbortError") return;
+				if (signal.aborted) return;
+				setMessages((prev) =>
+					prev.filter((message) => message.id !== userMessage.id),
+				);
 				setError(err instanceof Error ? err.message : "Failed to send message");
 			} finally {
-				setStreaming(false);
-				setStreamingContent("");
+				if (!signal.aborted) {
+					setStreaming(false);
+					setStreamingContent("");
+				}
 			}
 		},
-		[conversationId, streaming],
+		[conversationId, streaming, loading],
 	);
 
 	return {
@@ -146,6 +160,5 @@ export function useMessages(conversationId: string | null) {
 		streaming,
 		streamingContent,
 		send,
-		refresh,
 	};
 }
